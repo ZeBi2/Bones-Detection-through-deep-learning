@@ -1,0 +1,21 @@
+{
+    "model_name": "DenseNet121",
+    "image_size": [
+        224,
+        224
+    ],
+    "classes": [
+        "fractured",
+        "not_fractured"
+    ],
+    "class_mapping": {
+        "fractured": 0,
+        "not_fractured": 1
+    },
+    "positive_class": "fractured",
+    "positive_class_index": 0,
+    "input_channels": 3,
+    "model_file": "best_bones_fracture_model.keras",
+    "selection_metric": "F1-Score",
+    "best_f1_score": 0.8567674113009198
+}
