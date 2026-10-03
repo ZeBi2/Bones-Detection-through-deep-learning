@@ -1,15 +1,16 @@
-import json
 import pickle
 from pathlib import Path
 
 import numpy as np
 import streamlit as st
 import tensorflow as tf
+
 from PIL import Image
+from tensorflow.keras.applications.densenet import preprocess_input
 
 
 # ============================================================
-# PAGE CONFIGURATION
+# PAGE CONFIG
 # ============================================================
 
 st.set_page_config(
@@ -20,69 +21,107 @@ st.set_page_config(
 
 
 # ============================================================
-# PROJECT DIRECTORY
+# BASE DIRECTORY
 # ============================================================
 
 BASE_DIR = Path(__file__).resolve().parent
 
 
 # ============================================================
-# DEPLOYMENT FILES
+# FIND FILE
 # ============================================================
 
-MODEL_PATH = BASE_DIR / "best_bones_fracture_model.keras"
+def find_file(filename):
 
-MODEL_CONFIG_PATH = BASE_DIR / "model_config.pkl"
+    possible_paths = [
 
-CLASS_MAPPING_PATH = BASE_DIR / "class_mapping.pkl"
+        BASE_DIR / filename,
 
-IMAGE_CONFIG_PATH = BASE_DIR / "image_config.pkl"
+        BASE_DIR / "models" / filename,
 
-METADATA_JSON_PATH = BASE_DIR / "best_model_metadata.json"
+        BASE_DIR / "model" / filename,
 
-CLASS_MAPPING_JSON_PATH = BASE_DIR / "class_mapping.json"
+        BASE_DIR / "weights" / filename,
+
+    ]
+
+    for path in possible_paths:
+
+        if path.exists():
+            return path
+
+    return None
 
 
 # ============================================================
-# APPLICATION TITLE
+# FIND DEPLOYMENT FILES
 # ============================================================
 
-st.title("🦴 Bone Fracture Detection")
+MODEL_PATH = find_file(
+    "best_bones_fracture_model.keras"
+)
 
-st.markdown(
-    """
-    Upload a bone X-ray image and the trained DenseNet121
-    model will classify it as **Fractured** or
-    **Not Fractured**.
-    """
+MODEL_CONFIG_PATH = find_file(
+    "model_config.pkl"
+)
+
+CLASS_MAPPING_PATH = find_file(
+    "class_mapping.pkl"
+)
+
+IMAGE_CONFIG_PATH = find_file(
+    "image_config.pkl"
 )
 
 
 # ============================================================
-# REQUIRED FILES
+# TITLE
 # ============================================================
 
-REQUIRED_FILES = {
-    "Model": MODEL_PATH,
-    "Model configuration": MODEL_CONFIG_PATH,
-    "Class mapping": CLASS_MAPPING_PATH,
-    "Image configuration": IMAGE_CONFIG_PATH,
-}
+st.title(
+    "🦴 Bone Fracture Detection"
+)
+
+st.write(
+    "Upload a bone X-ray image and the trained "
+    "DenseNet121 model will classify it as "
+    "**Fractured** or **Not Fractured**."
+)
 
 
 # ============================================================
-# FILE VALIDATION
+# REQUIRED FILE CHECK
 # ============================================================
 
 missing_files = []
 
-for file_name, file_path in REQUIRED_FILES.items():
 
-    if not file_path.is_file():
+if MODEL_PATH is None:
 
-        missing_files.append(
-            f"{file_name}: {file_path.name}"
-        )
+    missing_files.append(
+        "best_bones_fracture_model.keras"
+    )
+
+
+if MODEL_CONFIG_PATH is None:
+
+    missing_files.append(
+        "model_config.pkl"
+    )
+
+
+if CLASS_MAPPING_PATH is None:
+
+    missing_files.append(
+        "class_mapping.pkl"
+    )
+
+
+if IMAGE_CONFIG_PATH is None:
+
+    missing_files.append(
+        "image_config.pkl"
+    )
 
 
 if missing_files:
@@ -92,7 +131,7 @@ if missing_files:
     )
 
     st.write(
-        "Streamlit is looking in:"
+        "Streamlit application directory:"
     )
 
     st.code(
@@ -103,22 +142,28 @@ if missing_files:
         "Missing files:"
     )
 
-    for missing in missing_files:
+    for filename in missing_files:
 
         st.error(
-            missing
+            filename
         )
 
     st.warning(
-        "Make sure all required files are uploaded "
-        "to the same GitHub directory as app.py."
+        "The trained .keras model must be uploaded "
+        "to the GitHub repository. PKL files cannot "
+        "replace the trained model."
+    )
+
+    st.info(
+        "Required model filename: "
+        "best_bones_fracture_model.keras"
     )
 
     st.stop()
 
 
 # ============================================================
-# LOAD PKL CONFIGURATIONS
+# LOAD CONFIGURATION
 # ============================================================
 
 try:
@@ -128,7 +173,9 @@ try:
         "rb"
     ) as file:
 
-        model_config = pickle.load(file)
+        model_config = pickle.load(
+            file
+        )
 
 
     with open(
@@ -136,7 +183,9 @@ try:
         "rb"
     ) as file:
 
-        class_mapping = pickle.load(file)
+        class_mapping = pickle.load(
+            file
+        )
 
 
     with open(
@@ -144,91 +193,22 @@ try:
         "rb"
     ) as file:
 
-        image_config = pickle.load(file)
+        image_config = pickle.load(
+            file
+        )
 
 
 except Exception as error:
 
     st.error(
-        "❌ Failed to load deployment configuration."
+        "❌ Configuration loading failed."
     )
 
-    st.exception(error)
+    st.exception(
+        error
+    )
 
     st.stop()
-
-
-# ============================================================
-# LOAD OPTIONAL JSON METADATA
-# ============================================================
-
-metadata_json = None
-
-if METADATA_JSON_PATH.is_file():
-
-    try:
-
-        with open(
-            METADATA_JSON_PATH,
-            "r",
-            encoding="utf-8"
-        ) as file:
-
-            metadata_json = json.load(file)
-
-    except Exception:
-
-        metadata_json = None
-
-
-# ============================================================
-# CLASSES
-# ============================================================
-
-classes = model_config.get(
-    "classes",
-    [
-        "fractured",
-        "not_fractured"
-    ]
-)
-
-
-# ============================================================
-# CLASS MAPPING
-# ============================================================
-
-if not class_mapping:
-
-    class_mapping = {
-        "fractured": 0,
-        "not_fractured": 1
-    }
-
-
-# ============================================================
-# IMAGE SIZE
-# ============================================================
-
-image_size = tuple(
-    model_config.get(
-        "image_size",
-        image_config.get(
-            "image_size",
-            (224, 224)
-        )
-    )
-)
-
-
-# ============================================================
-# MODEL INFORMATION
-# ============================================================
-
-MODEL_NAME = model_config.get(
-    "model_name",
-    "DenseNet121"
-)
 
 
 # ============================================================
@@ -239,25 +219,29 @@ MODEL_NAME = model_config.get(
 def load_model(model_path):
 
     return tf.keras.models.load_model(
+
         str(model_path),
+
+        custom_objects={
+            "preprocess_input":
+                preprocess_input
+        },
+
         compile=False,
+
         safe_mode=False
     )
 
 
 # ============================================================
-# LOAD MODEL
+# MODEL LOADING
 # ============================================================
 
 try:
 
-    with st.spinner(
-        "Loading DenseNet121 model..."
-    ):
-
-        model = load_model(
-            MODEL_PATH
-        )
+    model = load_model(
+        MODEL_PATH
+    )
 
 except Exception as error:
 
@@ -265,80 +249,60 @@ except Exception as error:
         "❌ Model loading failed."
     )
 
-    st.write(
-        "The model file exists, but TensorFlow/Keras "
-        "could not load it."
-    )
-
-    st.exception(error)
-
-    st.stop()
-
-
-# ============================================================
-# VERIFY MODEL
-# ============================================================
-
-try:
-
-    model_input_shape = model.input_shape
-
-    model_output_shape = model.output_shape
-
-except Exception as error:
-
     st.error(
-        "❌ Could not read model input/output shape."
+        "The model file exists but could not "
+        "be loaded."
     )
 
-    st.exception(error)
-
-    st.stop()
-
-
-# ============================================================
-# VERIFY OUTPUT CLASSES
-# ============================================================
-
-try:
-
-    number_of_outputs = int(
-        model_output_shape[-1]
-    )
-
-except Exception:
-
-    number_of_outputs = 2
-
-
-if number_of_outputs != len(classes):
-
-    st.error(
-        "❌ Model/configuration mismatch."
-    )
-
-    st.write(
-        f"Model outputs: {number_of_outputs}"
-    )
-
-    st.write(
-        f"Configured classes: {len(classes)}"
+    st.exception(
+        error
     )
 
     st.stop()
 
 
 # ============================================================
-# MODEL READY
+# MODEL STATUS
 # ============================================================
 
 st.success(
-    f"✅ {MODEL_NAME} model loaded successfully."
+    "✅ DenseNet121 model loaded successfully."
 )
 
 
 # ============================================================
-# MODEL DETAILS
+# GET MODEL CONFIG
+# ============================================================
+
+classes = model_config.get(
+
+    "classes",
+
+    [
+        "fractured",
+        "not_fractured"
+    ]
+)
+
+
+image_size = tuple(
+
+    model_config.get(
+
+        "image_size",
+
+        image_config.get(
+
+            "image_size",
+
+            (224, 224)
+        )
+    )
+)
+
+
+# ============================================================
+# DISPLAY MODEL INFORMATION
 # ============================================================
 
 with st.expander(
@@ -346,56 +310,31 @@ with st.expander(
 ):
 
     st.write(
-        "**Architecture:**",
-        MODEL_NAME
+        "**Architecture:** DenseNet121"
     )
 
     st.write(
-        "**Input Shape:**",
-        model_input_shape
+        f"**Input Size:** "
+        f"{image_size[0]} × {image_size[1]}"
     )
 
     st.write(
-        "**Output Shape:**",
-        model_output_shape
+        "**Classes:**"
     )
 
     st.write(
-        "**Image Size:**",
-        image_size
-    )
-
-    st.write(
-        "**Classes:**",
         classes
     )
 
-    st.write(
-        "**Class Mapping:**",
-        class_mapping
-    )
-
-    if metadata_json:
-
-        if "best_f1_score" in metadata_json:
-
-            st.write(
-                "**Best F1-Score:**",
-                f"{metadata_json['best_f1_score']:.4f}"
-            )
-
 
 # ============================================================
-# IMAGE UPLOADER
+# IMAGE UPLOAD
 # ============================================================
-
-st.subheader(
-    "Upload X-Ray Image"
-)
-
 
 uploaded_file = st.file_uploader(
-    "Choose an X-ray image",
+
+    "Upload Bone X-Ray Image",
+
     type=[
         "jpg",
         "jpeg",
@@ -416,16 +355,18 @@ if uploaded_file is not None:
     try:
 
         # ----------------------------------------------------
-        # OPEN IMAGE
+        # READ IMAGE
         # ----------------------------------------------------
 
         image = Image.open(
             uploaded_file
-        ).convert("RGB")
+        ).convert(
+            "RGB"
+        )
 
 
         # ----------------------------------------------------
-        # DISPLAY ORIGINAL IMAGE
+        # DISPLAY IMAGE
         # ----------------------------------------------------
 
         st.subheader(
@@ -434,13 +375,13 @@ if uploaded_file is not None:
 
         st.image(
             image,
-            caption="Uploaded Bone X-Ray",
+            caption="Uploaded X-Ray",
             use_container_width=True
         )
 
 
         # ----------------------------------------------------
-        # RESIZE IMAGE
+        # RESIZE
         # ----------------------------------------------------
 
         resized_image = image.resize(
@@ -449,56 +390,40 @@ if uploaded_file is not None:
 
 
         # ----------------------------------------------------
-        # CONVERT TO NUMPY
+        # ARRAY
         # ----------------------------------------------------
 
         image_array = np.asarray(
+
             resized_image,
+
             dtype=np.float32
         )
 
 
         # ----------------------------------------------------
-        # ADD BATCH DIMENSION
+        # BATCH
         # ----------------------------------------------------
 
         image_array = np.expand_dims(
+
             image_array,
+
             axis=0
         )
 
 
         # ----------------------------------------------------
-        # IMPORTANT
-        # ----------------------------------------------------
-        # The saved DenseNet121 model already contains
-        # DenseNet preprocess_input.
-        #
-        # Therefore:
-        #
-        # DO NOT call preprocess_input() here.
-        #
-        # Raw RGB image is passed to the model.
+        # PREDICTION
         # ----------------------------------------------------
 
+        prediction = model.predict(
 
-        # ----------------------------------------------------
-        # MODEL PREDICTION
-        # ----------------------------------------------------
+            image_array,
 
-        with st.spinner(
-            "Analyzing X-ray..."
-        ):
+            verbose=0
+        )
 
-            prediction = model.predict(
-                image_array,
-                verbose=0
-            )
-
-
-        # ----------------------------------------------------
-        # CONVERT PREDICTION
-        # ----------------------------------------------------
 
         prediction = np.asarray(
             prediction
@@ -506,7 +431,7 @@ if uploaded_file is not None:
 
 
         # ----------------------------------------------------
-        # GET PROBABILITIES
+        # TWO CLASS OUTPUT
         # ----------------------------------------------------
 
         if prediction.ndim == 2:
@@ -515,18 +440,19 @@ if uploaded_file is not None:
 
         else:
 
-            probabilities = prediction.flatten()
+            probabilities = prediction
 
 
         # ----------------------------------------------------
-        # VALIDATE OUTPUT
+        # CHECK OUTPUT
         # ----------------------------------------------------
 
         if len(probabilities) != len(classes):
 
             raise ValueError(
-                "Model prediction output does not "
-                "match configured classes."
+
+                "Model output does not match "
+                "the configured number of classes."
             )
 
 
@@ -535,6 +461,7 @@ if uploaded_file is not None:
         # ----------------------------------------------------
 
         predicted_index = int(
+
             np.argmax(
                 probabilities
             )
@@ -555,6 +482,7 @@ if uploaded_file is not None:
         # ----------------------------------------------------
 
         confidence = float(
+
             probabilities[
                 predicted_index
             ]
@@ -564,8 +492,6 @@ if uploaded_file is not None:
         # ----------------------------------------------------
         # RESULT
         # ----------------------------------------------------
-
-        st.divider()
 
         st.subheader(
             "Prediction Result"
@@ -586,13 +512,15 @@ if uploaded_file is not None:
 
 
         st.metric(
+
             "Confidence",
+
             f"{confidence * 100:.2f}%"
         )
 
 
         # ----------------------------------------------------
-        # CLASS PROBABILITIES
+        # PROBABILITIES
         # ----------------------------------------------------
 
         st.subheader(
@@ -605,28 +533,29 @@ if uploaded_file is not None:
         ):
 
             probability = float(
-                probabilities[index]
+
+                probabilities[
+                    index
+                ]
             )
 
 
-            display_name = class_name.replace(
-                "_",
-                " "
-            ).title()
-
-
             st.write(
-                f"**{display_name}: "
-                f"{probability * 100:.2f}%**"
+
+                f"**{class_name}**: "
+                f"{probability * 100:.2f}%"
             )
 
 
             st.progress(
+
                 min(
+
                     max(
                         probability,
                         0.0
                     ),
+
                     1.0
                 )
             )
@@ -638,7 +567,9 @@ if uploaded_file is not None:
             "❌ Prediction failed."
         )
 
-        st.exception(error)
+        st.exception(
+            error
+        )
 
 
 # ============================================================
@@ -649,7 +580,5 @@ st.divider()
 
 st.caption(
     "Research and educational use only. "
-    "This application is not a medical diagnostic device. "
-    "Please consult a qualified healthcare professional "
-    "for medical diagnosis."
+    "This application is not a medical diagnostic device."
 )
