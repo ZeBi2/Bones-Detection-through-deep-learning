@@ -1,9 +1,3 @@
-# ============================================================
-# BONE FRACTURE DETECTION - STREAMLIT APP
-# DenseNet121
-# ============================================================
-
-import os
 import pickle
 from pathlib import Path
 
@@ -47,7 +41,7 @@ IMAGE_CONFIG_PATH = BASE_DIR / "image_config.pkl"
 
 
 # ============================================================
-# HEADER
+# TITLE
 # ============================================================
 
 st.title("🦴 Bone Fracture Detection")
@@ -59,7 +53,7 @@ st.write(
 
 
 # ============================================================
-# DEBUG / FILE CHECK
+# REQUIRED FILE CHECK
 # ============================================================
 
 required_files = {
@@ -75,14 +69,11 @@ missing_files = []
 for name, path in required_files.items():
 
     if not path.exists():
+
         missing_files.append(
             f"{name}: {path.name}"
         )
 
-
-# ============================================================
-# STOP IF FILES ARE MISSING
-# ============================================================
 
 if missing_files:
 
@@ -103,23 +94,21 @@ if missing_files:
     )
 
     for item in missing_files:
-
         st.error(item)
 
     st.info(
-        "Make sure all required files are uploaded "
-        "to the same GitHub folder as app.py."
+        "Upload the missing files to the same "
+        "GitHub folder as app.py."
     )
 
     st.stop()
 
 
 # ============================================================
-# LOAD PKL CONFIGURATION
+# LOAD CONFIGURATION
 # ============================================================
 
-@st.cache_data
-def load_configurations():
+try:
 
     with open(
         MODEL_CONFIG_PATH,
@@ -145,57 +134,6 @@ def load_configurations():
         image_config = pickle.load(file)
 
 
-    return (
-        model_config,
-        class_mapping,
-        image_config
-    )
-
-
-# ============================================================
-# LOAD MODEL
-# ============================================================
-
-@st.cache_resource
-def load_app_model():
-
-    if not MODEL_PATH.exists():
-
-        raise FileNotFoundError(
-            "Model file not found: "
-            + str(MODEL_PATH)
-        )
-
-
-    model = tf.keras.models.load_model(
-        MODEL_PATH,
-
-        custom_objects={
-            "preprocess_input":
-                preprocess_input
-        },
-
-        compile=False,
-
-        safe_mode=False
-    )
-
-
-    return model
-
-
-# ============================================================
-# LOAD CONFIG
-# ============================================================
-
-try:
-
-    (
-        model_config,
-        class_mapping,
-        image_config
-    ) = load_configurations()
-
 except Exception as error:
 
     st.error(
@@ -208,24 +146,36 @@ except Exception as error:
 
 
 # ============================================================
-# LOAD MODEL
+# MODEL LOADING
 # ============================================================
+
+@st.cache_resource
+def load_model():
+
+    model = tf.keras.models.load_model(
+        str(MODEL_PATH),
+
+        custom_objects={
+            "preprocess_input":
+                preprocess_input
+        },
+
+        compile=False,
+
+        safe_mode=False
+    )
+
+    return model
+
 
 try:
 
-    model = load_app_model()
+    model = load_model()
 
 except Exception as error:
 
     st.error(
-        "Model inference failed."
-    )
-
-    st.write(
-        "Please check that "
-        "`best_bones_fracture_model.keras` "
-        "is present and compatible with "
-        "the TensorFlow version."
+        "Model loading failed."
     )
 
     st.exception(error)
@@ -234,7 +184,16 @@ except Exception as error:
 
 
 # ============================================================
-# MODEL INFORMATION
+# MODEL STATUS
+# ============================================================
+
+st.success(
+    "✅ DenseNet121 model loaded successfully."
+)
+
+
+# ============================================================
+# GET CONFIG
 # ============================================================
 
 classes = model_config.get(
@@ -247,24 +206,15 @@ classes = model_config.get(
 
 
 image_size = tuple(
-    image_config.get(
+    model_config.get(
         "image_size",
-        (224, 224)
+        [224, 224]
     )
 )
 
 
 # ============================================================
-# DISPLAY MODEL STATUS
-# ============================================================
-
-st.success(
-    "✅ DenseNet121 model loaded successfully."
-)
-
-
-# ============================================================
-# IMAGE UPLOADER
+# UPLOAD IMAGE
 # ============================================================
 
 uploaded_file = st.file_uploader(
@@ -289,7 +239,7 @@ if uploaded_file is not None:
     try:
 
         # ----------------------------------------------------
-        # LOAD IMAGE
+        # READ IMAGE
         # ----------------------------------------------------
 
         image = Image.open(
@@ -332,7 +282,7 @@ if uploaded_file is not None:
 
 
         # ----------------------------------------------------
-        # ADD BATCH DIMENSION
+        # BATCH DIMENSION
         # ----------------------------------------------------
 
         image_array = np.expand_dims(
@@ -342,7 +292,7 @@ if uploaded_file is not None:
 
 
         # ----------------------------------------------------
-        # MODEL PREDICTION
+        # PREDICTION
         # ----------------------------------------------------
 
         prediction = model.predict(
@@ -351,17 +301,13 @@ if uploaded_file is not None:
         )
 
 
-        # ----------------------------------------------------
-        # CONVERT OUTPUT TO NUMPY
-        # ----------------------------------------------------
-
         prediction = np.asarray(
             prediction
         )
 
 
         # ----------------------------------------------------
-        # HANDLE 2-CLASS OUTPUT
+        # TWO CLASS OUTPUT
         # ----------------------------------------------------
 
         if prediction.ndim == 2:
@@ -374,7 +320,7 @@ if uploaded_file is not None:
 
 
         # ----------------------------------------------------
-        # GET PREDICTED CLASS
+        # PREDICTED INDEX
         # ----------------------------------------------------
 
         predicted_index = int(
@@ -383,6 +329,10 @@ if uploaded_file is not None:
             )
         )
 
+
+        # ----------------------------------------------------
+        # PREDICTED CLASS
+        # ----------------------------------------------------
 
         predicted_class = classes[
             predicted_index
@@ -397,7 +347,7 @@ if uploaded_file is not None:
 
 
         # ----------------------------------------------------
-        # RESULTS
+        # RESULT
         # ----------------------------------------------------
 
         st.subheader(
@@ -425,7 +375,7 @@ if uploaded_file is not None:
 
 
         # ----------------------------------------------------
-        # PROBABILITY BREAKDOWN
+        # PROBABILITIES
         # ----------------------------------------------------
 
         st.subheader(
