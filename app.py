@@ -1,3 +1,8 @@
+# ============================================================
+# BONE FRACTURE DETECTION - STREAMLIT APP
+# DenseNet121
+# ============================================================
+
 import os
 import pickle
 from pathlib import Path
@@ -11,7 +16,7 @@ from tensorflow.keras.applications.densenet import preprocess_input
 
 
 # ============================================================
-# PAGE CONFIGURATION
+# PAGE CONFIG
 # ============================================================
 
 st.set_page_config(
@@ -59,22 +64,25 @@ st.write(
 
 required_files = {
     "Model": MODEL_PATH,
-    "Model Configuration": MODEL_CONFIG_PATH,
+    "Model Config": MODEL_CONFIG_PATH,
     "Class Mapping": CLASS_MAPPING_PATH,
-    "Image Configuration": IMAGE_CONFIG_PATH
+    "Image Config": IMAGE_CONFIG_PATH
 }
 
 
 missing_files = []
 
-for file_name, file_path in required_files.items():
+for name, path in required_files.items():
 
-    if not file_path.exists():
-
+    if not path.exists():
         missing_files.append(
-            f"{file_name}: {file_path.name}"
+            f"{name}: {path.name}"
         )
 
+
+# ============================================================
+# STOP IF FILES ARE MISSING
+# ============================================================
 
 if missing_files:
 
@@ -96,23 +104,22 @@ if missing_files:
 
     for item in missing_files:
 
-        st.error(
-            item
-        )
+        st.error(item)
 
     st.info(
-        "Make sure these files are uploaded to the "
-        "same GitHub folder as app.py."
+        "Make sure all required files are uploaded "
+        "to the same GitHub folder as app.py."
     )
 
     st.stop()
 
 
 # ============================================================
-# LOAD MODEL CONFIGURATION
+# LOAD PKL CONFIGURATION
 # ============================================================
 
-try:
+@st.cache_data
+def load_configurations():
 
     with open(
         MODEL_CONFIG_PATH,
@@ -121,22 +128,6 @@ try:
 
         model_config = pickle.load(file)
 
-except Exception as error:
-
-    st.error(
-        "Could not load model_config.pkl"
-    )
-
-    st.exception(error)
-
-    st.stop()
-
-
-# ============================================================
-# LOAD CLASS MAPPING
-# ============================================================
-
-try:
 
     with open(
         CLASS_MAPPING_PATH,
@@ -145,22 +136,6 @@ try:
 
         class_mapping = pickle.load(file)
 
-except Exception as error:
-
-    st.error(
-        "Could not load class_mapping.pkl"
-    )
-
-    st.exception(error)
-
-    st.stop()
-
-
-# ============================================================
-# LOAD IMAGE CONFIGURATION
-# ============================================================
-
-try:
 
     with open(
         IMAGE_CONFIG_PATH,
@@ -169,40 +144,12 @@ try:
 
         image_config = pickle.load(file)
 
-except Exception as error:
 
-    st.error(
-        "Could not load image_config.pkl"
+    return (
+        model_config,
+        class_mapping,
+        image_config
     )
-
-    st.exception(error)
-
-    st.stop()
-
-
-# ============================================================
-# IMAGE SIZE
-# ============================================================
-
-image_size = tuple(
-    image_config.get(
-        "image_size",
-        (224, 224)
-    )
-)
-
-
-# ============================================================
-# CLASS INFORMATION
-# ============================================================
-
-classes = model_config.get(
-    "classes",
-    [
-        "fractured",
-        "not_fractured"
-    ]
-)
 
 
 # ============================================================
@@ -210,10 +157,17 @@ classes = model_config.get(
 # ============================================================
 
 @st.cache_resource
-def load_model():
+def load_app_model():
 
-    return tf.keras.models.load_model(
+    if not MODEL_PATH.exists():
 
+        raise FileNotFoundError(
+            "Model file not found: "
+            + str(MODEL_PATH)
+        )
+
+
+    model = tf.keras.models.load_model(
         MODEL_PATH,
 
         custom_objects={
@@ -227,23 +181,25 @@ def load_model():
     )
 
 
+    return model
+
+
+# ============================================================
+# LOAD CONFIG
+# ============================================================
+
 try:
 
-    with st.spinner(
-        "Loading AI model..."
-    ):
-
-        model = load_model()
+    (
+        model_config,
+        class_mapping,
+        image_config
+    ) = load_configurations()
 
 except Exception as error:
 
     st.error(
-        "Model inference failed."
-    )
-
-    st.write(
-        "The model file was found, but TensorFlow "
-        "could not load it."
+        "Configuration loading failed."
     )
 
     st.exception(error)
@@ -252,7 +208,54 @@ except Exception as error:
 
 
 # ============================================================
-# MODEL READY
+# LOAD MODEL
+# ============================================================
+
+try:
+
+    model = load_app_model()
+
+except Exception as error:
+
+    st.error(
+        "Model inference failed."
+    )
+
+    st.write(
+        "Please check that "
+        "`best_bones_fracture_model.keras` "
+        "is present and compatible with "
+        "the TensorFlow version."
+    )
+
+    st.exception(error)
+
+    st.stop()
+
+
+# ============================================================
+# MODEL INFORMATION
+# ============================================================
+
+classes = model_config.get(
+    "classes",
+    [
+        "fractured",
+        "not_fractured"
+    ]
+)
+
+
+image_size = tuple(
+    image_config.get(
+        "image_size",
+        (224, 224)
+    )
+)
+
+
+# ============================================================
+# DISPLAY MODEL STATUS
 # ============================================================
 
 st.success(
@@ -261,13 +264,11 @@ st.success(
 
 
 # ============================================================
-# UPLOAD IMAGE
+# IMAGE UPLOADER
 # ============================================================
 
 uploaded_file = st.file_uploader(
-
-    "Upload a bone X-ray image",
-
+    "Upload Bone X-Ray Image",
     type=[
         "jpg",
         "jpeg",
@@ -288,7 +289,7 @@ if uploaded_file is not None:
     try:
 
         # ----------------------------------------------------
-        # OPEN IMAGE
+        # LOAD IMAGE
         # ----------------------------------------------------
 
         image = Image.open(
@@ -301,12 +302,12 @@ if uploaded_file is not None:
         # ----------------------------------------------------
 
         st.subheader(
-            "Uploaded X-ray"
+            "Uploaded X-Ray"
         )
 
         st.image(
             image,
-            caption="Uploaded X-ray",
+            caption="Uploaded X-Ray",
             use_container_width=True
         )
 
@@ -341,7 +342,7 @@ if uploaded_file is not None:
 
 
         # ----------------------------------------------------
-        # PREDICTION
+        # MODEL PREDICTION
         # ----------------------------------------------------
 
         prediction = model.predict(
@@ -351,13 +352,17 @@ if uploaded_file is not None:
 
 
         # ----------------------------------------------------
-        # HANDLE TWO-CLASS OUTPUT
+        # CONVERT OUTPUT TO NUMPY
         # ----------------------------------------------------
 
         prediction = np.asarray(
             prediction
         )
 
+
+        # ----------------------------------------------------
+        # HANDLE 2-CLASS OUTPUT
+        # ----------------------------------------------------
 
         if prediction.ndim == 2:
 
@@ -379,30 +384,20 @@ if uploaded_file is not None:
         )
 
 
-        # ----------------------------------------------------
-        # GET CLASS NAME
-        # ----------------------------------------------------
-
-        index_to_class = {
-            int(index): class_name
-            for class_name, index
-            in class_mapping.items()
-        }
-
-
-        predicted_class = index_to_class.get(
-            predicted_index,
-            classes[predicted_index]
-        )
+        predicted_class = classes[
+            predicted_index
+        ]
 
 
         confidence = float(
-            probabilities[predicted_index]
-        ) * 100
+            probabilities[
+                predicted_index
+            ]
+        )
 
 
         # ----------------------------------------------------
-        # RESULT
+        # RESULTS
         # ----------------------------------------------------
 
         st.subheader(
@@ -413,20 +408,24 @@ if uploaded_file is not None:
         if predicted_class == "fractured":
 
             st.error(
-                f"🦴 Fractured\n\n"
-                f"Confidence: {confidence:.2f}%"
+                "🦴 Fractured"
             )
 
         else:
 
             st.success(
-                f"✅ Not Fractured\n\n"
-                f"Confidence: {confidence:.2f}%"
+                "✅ Not Fractured"
             )
 
 
+        st.metric(
+            "Confidence",
+            f"{confidence * 100:.2f}%"
+        )
+
+
         # ----------------------------------------------------
-        # CLASS PROBABILITIES
+        # PROBABILITY BREAKDOWN
         # ----------------------------------------------------
 
         st.subheader(
@@ -434,64 +433,29 @@ if uploaded_file is not None:
         )
 
 
-        for index, class_name in index_to_class.items():
-
-            if index < len(probabilities):
-
-                probability = (
-                    float(
-                        probabilities[index]
-                    ) * 100
-                )
-
-                st.write(
-                    f"{class_name}: "
-                    f"{probability:.2f}%"
-                )
-
-                st.progress(
-                    min(
-                        max(
-                            probability / 100,
-                            0.0
-                        ),
-                        1.0
-                    )
-                )
-
-
-        # ----------------------------------------------------
-        # MODEL INFORMATION
-        # ----------------------------------------------------
-
-        with st.expander(
-            "Model Information"
+        for index, class_name in enumerate(
+            classes
         ):
 
+            probability = float(
+                probabilities[index]
+            )
+
+
             st.write(
-                "Model:",
-                model_config.get(
-                    "model_name",
-                    "DenseNet121"
+                f"{class_name}: "
+                f"{probability * 100:.2f}%"
+            )
+
+
+            st.progress(
+                min(
+                    max(
+                        probability,
+                        0.0
+                    ),
+                    1.0
                 )
-            )
-
-            st.write(
-                "Architecture:",
-                model_config.get(
-                    "model_architecture",
-                    "DenseNet121"
-                )
-            )
-
-            st.write(
-                "Image Size:",
-                image_size
-            )
-
-            st.write(
-                "Classes:",
-                classes
             )
 
 
@@ -505,16 +469,12 @@ if uploaded_file is not None:
 
 
 # ============================================================
-# DISCLAIMER
+# FOOTER
 # ============================================================
 
-st.markdown(
-    "---"
-)
+st.divider()
 
 st.caption(
-    "This application is intended for research and "
-    "educational purposes only. It is not a medical "
-    "diagnostic device and should not replace assessment "
-    "by a qualified healthcare professional."
+    "Research and educational use only. "
+    "This application is not a medical diagnostic device."
 )
